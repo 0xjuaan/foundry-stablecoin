@@ -30,7 +30,7 @@ contract DSCEngineTest is Test {
     // Test the pricefeed
     function testGetUSDPrice() public {
         uint256 usdValue = engine.getUSDPrice(wethPriceFeed);
-        int256 expected = 2000e8;
+        int256 expected = 2000e18;
         assertEq(usdValue, uint256(expected));
         
     }
