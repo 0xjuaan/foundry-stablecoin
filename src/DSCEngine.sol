@@ -327,6 +327,10 @@ contract DSCEngine is ReentrancyGuard {
     function _healthFactor(address user) private view returns (uint256) {
         (uint256 totalDSCMinted, uint256 collateralValueInUSD) = _getAccountInformation(user);
 
+        console.log("totalDSCMinted", totalDSCMinted);
+        console.log("collateralValueInUSD", collateralValueInUSD);
+        
+
         uint256 collateralAdjustedForThreshold = (collateralValueInUSD * LIQUIDATION_THRESHOLD) / 100; // due to 50% LT, we pretty much value their collateral less. lower threshold = lower we value their collateral
         return (collateralAdjustedForThreshold * PRECISION / totalDSCMinted); // always maintain the 1e18 at the end of our actual number
 

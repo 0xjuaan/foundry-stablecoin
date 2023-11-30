@@ -167,6 +167,69 @@ contract DSCEngineTest is Test {
     // TODO: Test the combined funcs (depositCollateralAndMint, redeemCollateralForDSC, )
     // TODO: Test liquidate(), getTotalCollateralValue(), getTokenAmountFromUSD()
 
+    function testdepositCollateralAndMint() basicUser public {
+        vm.startPrank(USER);
+        uint256 amountCollateralDeposited = 3e18 * PRECISION  / engine.getUSDPrice(wethPriceFeed);
+        uint256 amountDSCToMint = 1e18;
+
+        ERC20Mock(weth).approve(address(engine), amountCollateralDeposited);
+        engine.depositCollateralAndMint(weth, amountCollateralDeposited, amountDSCToMint);
+
+        assertEq(engine.getAmountCollateralDeposited(weth, USER), amountCollateralDeposited);
+        assertEq(DSC.balanceOf(USER), amountDSCToMint);
+    }
+
+    function testRedeemCollateralForDSCFailsWhenNotApprovedDSC() basicUser public {
+        vm.startPrank(USER);
+        uint256 amountCollateralDeposited = 3e18 * PRECISION  / engine.getUSDPrice(wethPriceFeed);
+        uint256 amountDSCToMint = 1.5e18;
+        ERC20Mock(weth).approve(address(engine), amountCollateralDeposited);
+        engine.depositCollateralAndMint(weth, amountCollateralDeposited, amountDSCToMint);
+
+        uint256 amountDSCToBurn = 7.5e17;
+        uint256 amountCollateralToRedeem = amountCollateralDeposited / 2;
+
+        
+        vm.expectRevert();
+        engine.redeemCollateralForDSC(weth, amountCollateralToRedeem, amountDSCToBurn);
+        vm.stopPrank();
+    }
+
+    function testRedeemCollateralForDSCFailsWhenRedeemingMuch() basicUser public {
+        vm.startPrank(USER);
+        uint256 amountCollateralDeposited = 3e18 * PRECISION  / engine.getUSDPrice(wethPriceFeed);
+        uint256 amountDSCToMint = 1.5e18;
+        ERC20Mock(weth).approve(address(engine), amountCollateralDeposited);
+        engine.depositCollateralAndMint(weth, amountCollateralDeposited, amountDSCToMint);
+
+        uint256 amountDSCToBurn = 7.5e17;
+        uint256 amountCollateralToRedeem = amountCollateralDeposited;
+
+        DSC.approve(address(engine), amountDSCToBurn);
+        vm.expectRevert(abi.encodeWithSelector(DSCEngine.DSCEngine__HealthFactorTooLow.selector, 0));
+        engine.redeemCollateralForDSC(weth, amountCollateralToRedeem, amountDSCToBurn);
+
+        vm.stopPrank();
+    }
+
+    function testRedeemCollateralForDSCWorks() basicUser public {
+        vm.startPrank(USER);
+        uint256 amountCollateralDeposited = 3e18 * PRECISION  / engine.getUSDPrice(wethPriceFeed);
+        uint256 amountDSCToMint = 1.5e18;
+        ERC20Mock(weth).approve(address(engine), amountCollateralDeposited);
+        engine.depositCollateralAndMint(weth, amountCollateralDeposited, amountDSCToMint);
+
+        uint256 amountDSCToBurn = 7.5e17;
+        uint256 amountCollateralToRedeem = amountCollateralDeposited / 2;
+
+        DSC.approve(address(engine), amountDSCToBurn);
+        engine.redeemCollateralForDSC(weth, amountCollateralToRedeem, amountDSCToBurn);
+
+        assertEq(engine.getAmountCollateralDeposited(weth, USER), amountCollateralDeposited - amountCollateralToRedeem);
+        assertEq(DSC.balanceOf(USER), amountDSCToMint - amountDSCToBurn);
+
+        vm.stopPrank();
+    }
     /////////////////////
     //Constructor Tests//
     /////////////////////
