@@ -23,6 +23,16 @@
 // private
 // view & pure functions
 
+
+/* 
+Invariants for this contract: 
+    When liquidating someone, your healthfactor should stay > 1
+    
+
+
+
+*/
+
 pragma solidity ^0.8.18;
 
 /*
@@ -355,6 +365,10 @@ contract DSCEngine is ReentrancyGuard {
 
     function getLiquidatorBonus()  external pure returns (uint256) {
         return LIQUIDATOR_BONUS;
+    }
+
+    function getCollateralTokens() external view returns (address[] memory) {
+        return s_collateralTokens;
     }
 
 }
