@@ -198,8 +198,6 @@ contract DSCEngine is ReentrancyGuard {
     public 
     {   
         s_DSCMinted[msg.sender] += amount;
-        console.log("we have minted %s DSC", s_DSCMinted[msg.sender]);
-        console.log("as a result, our health factor is : ", _healthFactor(msg.sender));
         _revertBadHealthFactor(msg.sender);
 
         bool minted = i_DSC.mint(msg.sender, amount);
@@ -234,7 +232,6 @@ contract DSCEngine is ReentrancyGuard {
 
         // We dont give it all to the liquidator, we give a set bonus of 10% (obviously this is crappy if the system is less than 110% collateralized) 
         uint256 amountToGiveToLiquidator = (amountOfCollateralTokens * LIQUIDATOR_BONUS) / 100;
-
         // Now send that money to the liquidator
         _redeemCollateral(collateralTokenAddress, amountToGiveToLiquidator, userToLiquidate, msg.sender);
 
@@ -261,7 +258,6 @@ contract DSCEngine is ReentrancyGuard {
 
             uint256 tokenPrice = getUSDPrice(priceFeedAddress);
             totalValue += (amount * tokenPrice / PRECISION);
-            console.log("totalValue", totalValue);
         }
 
         return totalValue;
@@ -313,7 +309,7 @@ contract DSCEngine is ReentrancyGuard {
     /* Private and internal view functions */
 
 
-    function getTokenAmountFromUSD(uint256 amount, address tokenAddress) private view returns (uint256) {
+    function getTokenAmountFromUSD(uint256 amount, address tokenAddress) public view returns (uint256) {
         uint256 tokenPrice = getUSDPrice(s_priceFeeds[tokenAddress]);
         return (amount * PRECISION / tokenPrice);
     }
@@ -327,8 +323,10 @@ contract DSCEngine is ReentrancyGuard {
     function _healthFactor(address user) private view returns (uint256) {
         (uint256 totalDSCMinted, uint256 collateralValueInUSD) = _getAccountInformation(user);
 
-        // YESSS!!!! FOUND BUG!!! THERE IS DIVISION BY ZERO HERE!!!!
-
+        if (totalDSCMinted == 0) {
+            // return the max integer
+            return type(uint256).max;
+        }
 
         uint256 collateralAdjustedForThreshold = (collateralValueInUSD * LIQUIDATION_THRESHOLD) / 100; // due to 50% LT, we pretty much value their collateral less. lower threshold = lower we value their collateral
         return (collateralAdjustedForThreshold * PRECISION / totalDSCMinted); // always maintain the 1e18 at the end of our actual number
@@ -349,6 +347,14 @@ contract DSCEngine is ReentrancyGuard {
 
     function getHealthFactor(address account) external view returns(uint256) {
         return _healthFactor(account);
+    }
+
+    function getDSCAmount(address user) external view returns (uint256) {
+        return s_DSCMinted[user];
+    }
+
+    function getLiquidatorBonus()  external pure returns (uint256) {
+        return LIQUIDATOR_BONUS;
     }
 
 }

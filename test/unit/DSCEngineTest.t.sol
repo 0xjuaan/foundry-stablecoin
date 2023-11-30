@@ -2,9 +2,10 @@
 
 pragma solidity ^0.8.18;
 
-import {Test} from "forge-std/Test.sol";
+import {Test, console} from "forge-std/Test.sol";
 import {DeployDSC} from "../../script/DeployDSC.s.sol";
 import {ERC20Mock} from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
+import {MockV3Aggregator} from "../mocks/MockV3Aggregator.sol";
 
 import {DecentralisedStableCoin} from "../../src/DecentralisedStableCoin.sol";
 import {DSCEngine} from "../../src/DSCEngine.sol";
@@ -26,6 +27,8 @@ contract DSCEngineTest is Test {
     uint256 PRECISION = 1e18;
 
     address USER;
+    address USER2;
+
     uint256 INITIAL_BALANCE = 10e18;
 
     ERC20Mock wethMock = ERC20Mock(weth);
@@ -43,6 +46,14 @@ contract DSCEngineTest is Test {
     modifier basicUser() {
         USER = makeAddr("user1");
         deal(weth, USER, INITIAL_BALANCE);
+        _;
+    }
+
+    modifier multiUser() {
+        USER = makeAddr("user1");
+        USER2 = makeAddr("user2");
+        deal(weth, USER, INITIAL_BALANCE);
+        deal(weth, USER2, INITIAL_BALANCE);
         _;
     }
 
@@ -164,9 +175,6 @@ contract DSCEngineTest is Test {
         vm.stopPrank();
     }
 
-    // TODO: Test the combined funcs (depositCollateralAndMint, redeemCollateralForDSC, )
-    // TODO: Test liquidate(), getTotalCollateralValue(), getTokenAmountFromUSD()
-
     function testdepositCollateralAndMint() basicUser public {
         vm.startPrank(USER);
         uint256 amountCollateralDeposited = 3e18 * PRECISION  / engine.getUSDPrice(wethPriceFeed);
@@ -230,6 +238,101 @@ contract DSCEngineTest is Test {
 
         vm.stopPrank();
     }
+
+    /**
+     * @dev Test that the liquidation function works
+     */
+    function testLiquidationFailsIfHealthFactorGood() multiUser public {
+
+        vm.startPrank(USER);
+        uint256 amountCollateralDeposited = 3e18 * PRECISION  / engine.getUSDPrice(wethPriceFeed);
+        uint256 amountDSCToMint = 1.5e18;
+        ERC20Mock(weth).approve(address(engine), amountCollateralDeposited);
+        engine.depositCollateralAndMint(weth, amountCollateralDeposited, amountDSCToMint);
+        vm.stopPrank();
+
+        vm.startPrank(USER2);
+        vm.expectRevert(DSCEngine.DSCEngine__CannotLiquidateHealthyUser.selector);
+        engine.liquidate(weth, USER, 1.5e18);
+        vm.stopPrank();
+    }
+
+    function testLiquidationFailsIfOverLiquidating() multiUser public {
+
+        vm.startPrank(USER);
+        uint256 amountCollateralDeposited = 3e18 * PRECISION  / engine.getUSDPrice(wethPriceFeed);
+        uint256 amountDSCToMint = 1.5e18;
+        ERC20Mock(weth).approve(address(engine), amountCollateralDeposited);
+        engine.depositCollateralAndMint(weth, amountCollateralDeposited, amountDSCToMint);
+        vm.stopPrank();
+
+        vm.startPrank(USER2);
+
+        // Make weth less valuable
+        MockV3Aggregator(wethPriceFeed).updateAnswer(1500e8);
+
+        vm.expectRevert(DSCEngine.DSCEngine__NotEnoughDSCToBurn.selector);
+        engine.liquidate(weth, USER, 1.6e18);
+        vm.stopPrank();
+    }
+
+    function testLiquidationFailsIfWeakUser() multiUser public {
+
+        vm.startPrank(USER);
+        uint256 amountCollateralDeposited = 3e18 * PRECISION  / engine.getUSDPrice(wethPriceFeed);
+        uint256 amountDSCToMint = 1.5e18;
+        ERC20Mock(weth).approve(address(engine), amountCollateralDeposited);
+        engine.depositCollateralAndMint(weth, amountCollateralDeposited, amountDSCToMint);
+        vm.stopPrank();
+
+        vm.startPrank(USER2);
+
+        // Make weth less valuable
+        MockV3Aggregator(wethPriceFeed).updateAnswer(1500e8);
+
+        DSC.approve(address(engine), 1.5e18);
+
+        vm.expectRevert();
+        engine.liquidate(weth, USER, 1.5e18);
+        vm.stopPrank();
+    }
+
+    function testLiquidationWorksIfUserHasDSC() multiUser public {
+
+        vm.startPrank(USER);
+        uint256 amountCollateralDeposited = 3e18 * PRECISION  / engine.getUSDPrice(wethPriceFeed);
+        uint256 amountDSCToMint = 1.5e18;
+        ERC20Mock(weth).approve(address(engine), amountCollateralDeposited);
+        engine.depositCollateralAndMint(weth, amountCollateralDeposited, amountDSCToMint);
+        vm.stopPrank();
+
+        vm.startPrank(USER2);
+
+        // Make weth less valuable
+        uint256 USER2_DEPOSIT_AMOUNT = amountCollateralDeposited * 2;
+        DSC.approve(address(engine), 1.5e18);
+
+        ERC20Mock(weth).approve(address(engine), USER2_DEPOSIT_AMOUNT);
+        engine.depositCollateralAndMint(weth, USER2_DEPOSIT_AMOUNT, amountDSCToMint);
+
+        MockV3Aggregator(wethPriceFeed).updateAnswer(1500e8);
+
+        uint256 LIQUIDATION_AMOUNT = 1.5e18;
+        engine.liquidate(weth, USER, LIQUIDATION_AMOUNT);
+
+
+        // Check that the liquidator gained the bonus
+        uint256 amountOfCollateralTokens = engine.getTokenAmountFromUSD(LIQUIDATION_AMOUNT, weth);
+        uint256 amountToGiveLiquidator = amountOfCollateralTokens * engine.getLiquidatorBonus() / 100;
+
+        // Check the balance of the liquidator
+        assertEq(ERC20Mock(weth).balanceOf(USER2), INITIAL_BALANCE - USER2_DEPOSIT_AMOUNT + amountToGiveLiquidator);
+
+        // Check the collateral remaning in the vault
+        assertEq(engine.getAmountCollateralDeposited(weth, USER), amountCollateralDeposited - amountToGiveLiquidator);
+        vm.stopPrank();
+    }
+
     /////////////////////
     //Constructor Tests//
     /////////////////////
