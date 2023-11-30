@@ -225,14 +225,14 @@ contract DSCEngine is ReentrancyGuard {
         // Since they are unhealthy, lets liquidate them (burn their debt, take their collateral)
         uint256 amountDSC = s_DSCMinted[userToLiquidate];
 
-        if (amount > amountDSC) {revert DSCEngine__NotEnoughDSCToBurn();}
-        _burnDSC(amountDSC,  userToLiquidate, msg.sender); 
+        if (amount > amountDSC) {revert DSCEngine__NotEnoughDSCToBurn();} // trying to burn too much DSC
+        _burnDSC(amountDSC, userToLiquidate, msg.sender); 
 
         // Now lets redeem their collateral
-        // First we gotta find out how much of that collateralToken we need
+        // First we gotta find out how much of that collateralToken we need, based on the DSC value that was burned
         uint256 amountOfCollateralTokens = getTokenAmountFromUSD(amount, collateralTokenAddress);   
 
-        // We dont give it all to the liquidator, we give a set bonus (obviously this is crappy if the system is less than 110% collateralized) 
+        // We dont give it all to the liquidator, we give a set bonus of 10% (obviously this is crappy if the system is less than 110% collateralized) 
         uint256 amountToGiveToLiquidator = (amountOfCollateralTokens * LIQUIDATOR_BONUS) / 100;
 
         // Now send that money to the liquidator
@@ -327,9 +327,8 @@ contract DSCEngine is ReentrancyGuard {
     function _healthFactor(address user) private view returns (uint256) {
         (uint256 totalDSCMinted, uint256 collateralValueInUSD) = _getAccountInformation(user);
 
-        console.log("totalDSCMinted", totalDSCMinted);
-        console.log("collateralValueInUSD", collateralValueInUSD);
-        
+        // YESSS!!!! FOUND BUG!!! THERE IS DIVISION BY ZERO HERE!!!!
+
 
         uint256 collateralAdjustedForThreshold = (collateralValueInUSD * LIQUIDATION_THRESHOLD) / 100; // due to 50% LT, we pretty much value their collateral less. lower threshold = lower we value their collateral
         return (collateralAdjustedForThreshold * PRECISION / totalDSCMinted); // always maintain the 1e18 at the end of our actual number
