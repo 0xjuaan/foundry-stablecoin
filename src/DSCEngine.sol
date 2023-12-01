@@ -54,6 +54,7 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 import {console} from "forge-std/Test.sol";
+import {OracleLib} from "./libraries/OracleLib.sol";
 
 contract DSCEngine is ReentrancyGuard {
     //////////
@@ -83,6 +84,11 @@ contract DSCEngine is ReentrancyGuard {
     uint256 private constant LIQUIDATION_THRESHOLD = 50;
     uint256 private constant MINIMUM_HEALTH_FACTOR = 1e18;
     uint256 private constant LIQUIDATOR_BONUS = 110;
+
+    /////////
+    //Types//
+    /////////
+    using OracleLib for AggregatorV3Interface;
 
     //////////
     //Events//
@@ -276,7 +282,7 @@ contract DSCEngine is ReentrancyGuard {
     // Uses pricefeed 
     function getUSDPrice(address priceFeedAddress) public view returns (uint256) {
        AggregatorV3Interface priceFeed = AggregatorV3Interface(priceFeedAddress);
-       (,int256 USDPrice,,,) = priceFeed.latestRoundData();
+       (,int256 USDPrice,,,) = priceFeed.staleCheckLatestRoundData();
        uint8 decimals = priceFeed.decimals();
        uint8 additionalPrecision = 18 - decimals;
 
@@ -325,7 +331,7 @@ contract DSCEngine is ReentrancyGuard {
     }
 
     
-    function _getAccountInformation(address user) private view returns (uint256 totalDSCMinted, uint256 collateralValueInUSD) {
+    function _getAccountInformation(address user) public view returns (uint256 totalDSCMinted, uint256 collateralValueInUSD) {
         totalDSCMinted = s_DSCMinted[user];
         collateralValueInUSD = getTotalCollateralValue(user);
     }
@@ -369,6 +375,10 @@ contract DSCEngine is ReentrancyGuard {
 
     function getCollateralTokens() external view returns (address[] memory) {
         return s_collateralTokens;
+    }
+
+    function getPriceFeed(address token) external view returns (address) {
+        return s_priceFeeds[token];
     }
 
 }

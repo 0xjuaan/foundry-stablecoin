@@ -7,13 +7,13 @@ pragma solidity ^0.8.18;
 
 import {Test, console} from "forge-std/Test.sol";
 import {StdInvariant} from "forge-std/StdInvariant.sol";
-import {DeployDSC} from "../../script/DeployDSC.s.sol";
+import {DeployDSC} from "../../../script/DeployDSC.s.sol";
 import {ERC20Mock} from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
-import {MockV3Aggregator} from "../mocks/MockV3Aggregator.sol";
+import {MockV3Aggregator} from "../../mocks/MockV3Aggregator.sol";
 
-import {DecentralisedStableCoin} from "../../src/DecentralisedStableCoin.sol";
-import {DSCEngine} from "../../src/DSCEngine.sol";
-import {HelperConfig} from "../../script/HelperConfig.s.sol";
+import {DecentralisedStableCoin} from "../../../src/DecentralisedStableCoin.sol";
+import {DSCEngine} from "../../../src/DSCEngine.sol";
+import {HelperConfig} from "../../../script/HelperConfig.s.sol";
 
 import {Handler} from "./Handler.t.sol";
 
@@ -47,7 +47,10 @@ contract Invariants is StdInvariant, Test {
         uint256 totalWETH = ERC20Mock(weth).balanceOf(address(engine));
         uint256 totalWBTC = ERC20Mock(wbtc).balanceOf(address(engine));
 
-        uint256 totalCollateralValue = engine.getUSDPrice(weth)*totalWETH + engine.getUSDPrice(wbtc)*totalWBTC;
-        assert(totalSupply < totalCollateralValue);
+        uint256 totalCollateralValue = engine.getUSDPrice(wethPriceFeed)*totalWETH / 1e18 + engine.getUSDPrice(wbtcPriceFeed)*totalWBTC / 1e18;
+
+        console.log("totalSupply: %s", totalSupply);
+        console.log("totalCollateralValue: %s", totalCollateralValue);
+        assert(totalSupply <= totalCollateralValue);
     }
 }
