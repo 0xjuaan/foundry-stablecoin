@@ -1,1 +1,1 @@
-### will do readme later
+### Algorithmic Stablecoin
